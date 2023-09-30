@@ -1,0 +1,73 @@
+def train_loop(model, test_data,
+               train_dataloader, test_dataloader, max_epoch=10):
+    pbar = tqdm(range(max_epoch),
+                desc=f'train_loss=nan, val_loss=nan')
+
+    train_losses = []
+    val_losses = []
+    train_iou = []
+    val_iou = []
+
+    for epoch in pbar:
+        model.train() # переводим модель в режим обучения
+        train_loss = []
+        train_iou_ = []
+
+        for x, y in train_dataloader:
+            x = x.to(device) # переносим данные на видеокарту
+            y = y.to(device)
+
+            predicted_proba = model(x) # запускаем модель
+
+            loss = criterion(predicted_proba, y) # считаем лосс
+            train_loss.append(loss.item())
+            print(predicted_proba.shape, y.shape)
+            predicted_mask = predicted_proba > 0.5
+            target_mask = y.bool()
+            batch_iou = iou(predicted_mask, target_mask)
+            train_iou_.append(batch_iou.cpu().numpy())
+            
+             # Обратный проход
+            loss.backward()
+            # Шаг градиента
+            optimizer.step()
+            # Зануляем градиенты
+            optimizer.zero_grad()
+
+        train_losses.append(np.mean(train_loss))
+        train_iou.append(np.mean(train_iou_))
+
+        model.eval() # переводим модель в режим инференса
+        val_loss = []
+        val_iou_ = []
+
+        with torch.no_grad(): # не накпливаем градиенты
+            for x, y in test_dataloader:
+                x = x.to(device) # переносим данные на видеокарту
+                y = y.to(device)
+
+                # ПОСЧИТАЙТЕ ЛОСС И IOU на валидации
+                #loss = criterion(logits, y_batch.long().to(device))
+                val_loss.append(loss.item())
+
+                predicted_mask = predicted_proba > 0.5
+                target_mask = y.bool()
+                batch_iou = iou(predicted_mask, target_mask)
+                val_iou_.append(batch_iou)
+                
+
+            val_losses.append(np.mean(val_loss))
+            val_iou.append(np.mean(val_iou_))
+
+            res = []
+            if (epoch % 5 == 0) or (epoch == max_epoch - 1):
+                for i in range(5):
+                    # предсказываем маски для первых пяти картинок
+                    res.append(model(test_data[i][0].unsqueeze(0).cuda()).squeeze(0))
+
+                clear_output(wait=True)
+                show_res(res, epoch, max_epoch) # отрисовываем результат
+
+        pbar.set_description(f'train_loss={np.mean(train_loss)}, val_loss={np.mean(val_loss)}, train_iou={np.mean(train_iou_)}, val_iou={np.mean(val_iou_)}')
+
+    return train_losses, val_losses, train_iou, val_iou
