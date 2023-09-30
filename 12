@@ -13,6 +13,8 @@ def train_loop(model, test_data,
         train_loss = []
         train_iou_ = []
 
+        model.train(True)
+
         for x, y in train_dataloader:
             x = x.to(device) # переносим данные на видеокарту
             y = y.to(device)
@@ -21,13 +23,14 @@ def train_loop(model, test_data,
 
             loss = criterion(predicted_proba, y) # считаем лосс
             train_loss.append(loss.item())
-            print(predicted_proba.shape, y.shape)
+
             predicted_mask = predicted_proba > 0.5
             target_mask = y.bool()
             batch_iou = iou(predicted_mask, target_mask)
             train_iou_.append(batch_iou.cpu().numpy())
-            
-             # Обратный проход
+
+            # СДЕЛАЙТЕ ШАГ ОПТИМИЗАЦИИ
+            # Обратный проход
             loss.backward()
             # Шаг градиента
             optimizer.step()
@@ -47,14 +50,13 @@ def train_loop(model, test_data,
                 y = y.to(device)
 
                 # ПОСЧИТАЙТЕ ЛОСС И IOU на валидации
-                #loss = criterion(logits, y_batch.long().to(device))
-                val_loss.append(loss.item())
+                predicted_proba = model(x)
+                val_loss.append(criterion(predicted_proba, y).item())
 
                 predicted_mask = predicted_proba > 0.5
                 target_mask = y.bool()
-                batch_iou = iou(predicted_mask, target_mask)
-                val_iou_.append(batch_iou)
-                
+                val_iou_.append(iou(predicted_mask, target_mask).cpu().numpy())
+
 
             val_losses.append(np.mean(val_loss))
             val_iou.append(np.mean(val_iou_))
